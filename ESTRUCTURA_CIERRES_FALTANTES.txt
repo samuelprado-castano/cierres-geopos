@@ -1,0 +1,188 @@
+===============================================================================
+ESTRUCTURA DEL SISTEMA DE PROCESAMIENTO DE CIERRES FALTANTES
+===============================================================================
+
+📦 ARCHIVOS CREADOS:
+
+1. SCRIPT PRINCIPAL (Ejecutar este)
+   ├─ process_missing_cierres.py
+   │  └─ Flujo completo: busca → QA → genera comandos
+
+2. MÓDULOS DE LÓGICA (Importados por el principal)
+   ├─ src/missing_cierres.py
+   │  └─ MissingCierresProcessor: buscar y comparar cierres
+   └─ src/qa_missing_cierres.py
+      └─ QAMissingCierres: validar datos y módulos
+
+3. QUERIES SQL (Ejecutar manualmente si es necesario)
+   └─ validation_query.sql
+      └─ Queries para ejecutar en cada servidor por separado
+
+4. DOCUMENTACIÓN
+   ├─ README_MISSING_CIERRES.md
+   │  └─ Guía completa de uso
+   ├─ example_manual_usage.py
+   │  └─ Ejemplos de código para uso avanzado
+   └─ ESTRUCTURA_CIERRES_FALTANTES.txt (este archivo)
+
+===============================================================================
+FLUJO DE EJECUCIÓN:
+===============================================================================
+
+PASO 1: IDENTIFICAR FALTANTES
+┌──────────────────────────────────────────────────────────────┐
+│ python process_missing_cierres.py                            │
+├──────────────────────────────────────────────────────────────┤
+│ 1. Lee geocom.totals (enero 2026)      → 300 cierres        │
+│ 2. Lee DW.cierres (enero 2026)          → 127 cierres        │
+│ 3. Compara por localid + pos + closed   → 173 FALTANTES      │
+└──────────────────────────────────────────────────────────────┘
+
+PASO 2: EJECUTAR QA
+┌──────────────────────────────────────────────────────────────┐
+│ Para cada cierre faltante:                                   │
+├──────────────────────────────────────────────────────────────┤
+│ ✓ ¿Existe en geocom.totals?                                  │
+│ ✓ ¿Hay datos de ventas en geocom?                            │
+│ ✓ ¿Hay datos de medios de pago en geocom?                    │
+│ ✓ ¿NO existe en DW.cierres?       (validación de faltante)   │
+│ ✓ ¿NO existe en DW.cierres_detalle?                          │
+└──────────────────────────────────────────────────────────────┘
+Salida: qa_missing_cierres.csv
+
+PASO 3: GENERAR COMANDOS
+┌──────────────────────────────────────────────────────────────┐
+│ Para cada cierre faltante:                                   │
+├──────────────────────────────────────────────────────────────┤
+│ python run.py --modulos VENTAS MEDIOS_PAGO ANULACIONES \     │
+│   --localid 1 --pos 1 --fecha_ini 20260105 --fecha_fin 20... │
+└──────────────────────────────────────────────────────────────┘
+Salida: missing_cierres_commands.sh
+
+PASO 4: EJECUTAR EN PROD (CUANDO SEA APROBADO)
+┌──────────────────────────────────────────────────────────────┐
+│ bash missing_cierres_commands.sh                             │
+│                                                              │
+│ (Esto cargará los 173 cierres en DW)                         │
+└──────────────────────────────────────────────────────────────┘
+
+===============================================================================
+RESULTADOS ESPERADOS DESPUÉS DE EJECUTAR process_missing_cierres.py:
+===============================================================================
+
+CONSOLA:
+├─ Resumen de cierres faltantes
+├─ Reporte QA (✓ PASS / ✗ FAIL / ⚠️ WARNING)
+└─ Comandos a ejecutar en PROD
+
+ARCHIVOS GENERADOS:
+├─ qa_missing_cierres.csv
+│  └─ Detalle de todos los tests (útil para auditoría)
+└─ missing_cierres_commands.sh
+   └─ Script con 173 comandos para ejecutar en PROD
+
+===============================================================================
+VALIDACIONES DE QA (Deben pasar TODAS antes de ir a PROD):
+===============================================================================
+
+Test 1: Cierre existe en geocom
+   └─ Verifica que el registro esté en totals
+
+Test 2: Datos de ventas existen en geocom
+   └─ Verifica que haya tickets/ventas para ese cierre
+
+Test 3: Datos de medios pago existen en geocom
+   └─ Verifica que haya pagos registrados
+
+Test 4: Cierre NO existe en DW (CRÍTICO)
+   └─ Confirma que realmente falta en DW
+
+Test 5: Detalle NO existe en DW (CRÍTICO)
+   └─ Confirma que no hay datos parciales en DW
+
+===============================================================================
+EJEMPLOS DE USO:
+===============================================================================
+
+Uso básico (completo):
+   $ python process_missing_cierres.py
+
+Uso manual (exploratorio):
+   $ python example_manual_usage.py
+
+Revisar resultados después:
+   $ cat qa_missing_cierres.csv            # Ver reporte QA
+   $ cat missing_cierres_commands.sh       # Ver comandos para ejecutar
+
+Si aprueba:
+   $ bash missing_cierres_commands.sh      # Ejecutar en PROD
+
+===============================================================================
+SEGURIDAD Y AUDITORÍA:
+===============================================================================
+
+✓ NO ejecuta run.py automáticamente
+✓ Genera archivo .sh para auditoría
+✓ Genera reporte QA en CSV
+✓ Requiere aprobación manual antes de PROD
+✓ Valida datos antes de procesar
+
+Trazabilidad:
+   ├─ qa_missing_cierres.csv      → ¿Qué se validó?
+   ├─ missing_cierres_commands.sh → ¿Qué se ejecutó?
+   └─ git log                     → ¿Cuándo se ejecutó?
+
+===============================================================================
+CASOS DE ERROR:
+===============================================================================
+
+Si Test FAIL: "Cierre NO existe en DW"
+   └─ El cierre ya fue cargado → NO procesar
+
+Si Test FAIL: "Datos de ventas existen en geocom"
+   └─ Cierre sin ventas → Revisar si es válido
+
+Si Test ERROR: "Error al conectar geocom"
+   └─ Verificar credenciales en .env
+
+Si generó 0 cierres faltantes:
+   └─ Todos los cierres ya fueron cargados ✓
+
+===============================================================================
+CUÁNDO USAR CADA ARCHIVO:
+===============================================================================
+
+process_missing_cierres.py
+   → Para ejecución completa automática
+   → Cuando necesita QA + genera comandos
+   → Primera opción
+
+example_manual_usage.py
+   → Para exploración manual
+   → Para QA de cierres específicos
+   → Para generar comandos solo de ciertos locales
+
+validation_query.sql
+   → Para verificar datos en SQL Server directamente
+   → Para auditoría manual
+   → Para investigar problemas
+
+src/missing_cierres.py
+   → Para importar y usar en otros scripts
+   → Para integración con sistemas externos
+
+src/qa_missing_cierres.py
+   → Para QA personalizado
+   → Para tests adicionales
+
+===============================================================================
+PRÓXIMOS PASOS:
+===============================================================================
+
+1. ✓ Ejecutar: python process_missing_cierres.py
+2. ✓ Revisar: qa_missing_cierres.csv
+3. ✓ Aprobar: todos los tests deben ser ✓ PASS
+4. ✓ Ejecutar en PROD: bash missing_cierres_commands.sh
+5. ✓ Verificar: que los 173 cierres estén en DW
+
+===============================================================================

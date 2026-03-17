@@ -1,0 +1,167 @@
+(.venv) PS C:\Users\samuel.prado\Castaño Panaderías\TIC - Datos y Desarrollo\Proyectos\GeoPOS\cierres-geopos> python process_missing_cierres.py
+
+====================================================================================================
+PROCESADOR DE CIERRES FALTANTES
+====================================================================================================
+
+📅 Período a analizar: 2026-01-01 a 2026-01-02
+
+----------------------------------------------------------------------------------------------------
+PASO 1: Identificando cierres faltantes
+----------------------------------------------------------------------------------------------------
+
+📊 RESUMEN DEL PERÍODO 20260101-20260102:
+   - Cierres en geocom.totals: 246
+   - Cierres en DW.cierres: 239
+   - Cierres faltantes: 7
+
+================================================================================
+CIERRES FALTANTES EN DW
+================================================================================
+
+Local 149:
+  POS 1: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 20:46:17.257000 | ID: 2601022046171491 | Z: 2280
+  POS 2: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 20:46:42.870000 | ID: 2601022046421492 | Z: 2990
+
+Local 259:
+  POS 1: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 20:48:30.440000 | ID: 2601022048302591 | Z: 1056
+
+Local 309:
+  POS 2: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 20:52:02.133000 | ID: 2601022052023092 | Z: 362
+
+Local 312:
+  POS 1: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 20:26:32.333000 | ID: 2601022026323121 | Z: 186
+
+Local 814:
+  POS 1: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 20:31:09.210000 | ID: 2601022031098141 | Z: 2523
+
+Local 844:
+  POS 1: 1 cierre(s) faltante(s)
+    - Closed: 2026-01-02 19:46:37.007000 | ID: 2601021946378441 | Z: 499
+
+================================================================================
+Total de cierres faltantes: 7
+================================================================================
+
+
+----------------------------------------------------------------------------------------------------
+PASO 2: Validando datos de cierres faltantes (QA)
+----------------------------------------------------------------------------------------------------
+
+================================================================================
+INICIANDO QA DE CIERRES FALTANTES
+================================================================================
+
+🔍 Ejecutando QA para cierre 149-1-Z2280 (2026-01-02 20:46:17.257000)
+------------------------------------------------------------
+
+🔍 Ejecutando QA para cierre 149-2-Z2990 (2026-01-02 20:46:42.870000)
+------------------------------------------------------------
+
+🔍 Ejecutando QA para cierre 259-1-Z1056 (2026-01-02 20:48:30.440000)
+------------------------------------------------------------
+
+🔍 Ejecutando QA para cierre 309-2-Z362 (2026-01-02 20:52:02.133000)
+------------------------------------------------------------
+
+🔍 Ejecutando QA para cierre 312-1-Z186 (2026-01-02 20:26:32.333000)
+------------------------------------------------------------
+
+🔍 Ejecutando QA para cierre 814-1-Z2523 (2026-01-02 20:31:09.210000)
+------------------------------------------------------------
+
+🔍 Ejecutando QA para cierre 844-1-Z499 (2026-01-02 19:46:37.007000)
+------------------------------------------------------------
+
+====================================================================================================
+REPORTE QA - RESUMEN
+====================================================================================================
+
+📊 TOTALES:
+   Total de tests ejecutados: 49
+   ✓ PASS:     49     (100%)
+   ⚠️  WARNING:  0      ( 0%)
+   ✗ FAIL:     0      ( 0%)
+   ✗ ERROR:    0      ( 0%)
+
+📋 RESUMEN POR TIPO DE TEST:
+   Cierre NO existe en DW (validación de faltante)
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+   Cierre existe en geocom
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+   Consistencia de datos (cabecera-detalle)
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+   Datos de medios pago existen en geocom
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+   Datos de ventas existen en geocom
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+   Detalle del cierre NO existe en DW
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+   Integridad de TODAS las tablas de cierre
+      ✓7 ⚠0 ✗0 E0 (Total: 7)
+
+✅ SIN ANOMALÍAS - Todos los tests pasaron correctamente
+
+====================================================================================================
+
+✓ Reporte QA exportado a qa_missing_cierres.csv
+
+----------------------------------------------------------------------------------------------------
+PASO 3: Generando comandos para run.py
+----------------------------------------------------------------------------------------------------
+
+====================================================================================================
+COMANDOS PARA EJECUTAR run.py (Modo Z - por znumber)
+====================================================================================================
+
+Módulos a ejecutar: VENTAS, MEDIOS_PAGO, REDONDEOS, DEPOSITOS, GUIAS
+Total de cierres a procesar: 7
+
+[1/7] Local 149 | POS 1 | Z 2280 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 149 --pos 1 --z 2280
+
+[2/7] Local 149 | POS 2 | Z 2990 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 149 --pos 2 --z 2990
+
+[3/7] Local 259 | POS 1 | Z 1056 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 259 --pos 1 --z 1056
+
+[4/7] Local 309 | POS 2 | Z 362 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 309 --pos 2 --z 362
+
+[5/7] Local 312 | POS 1 | Z 186 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 312 --pos 1 --z 186
+
+[6/7] Local 814 | POS 1 | Z 2523 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 814 --pos 1 --z 2523
+
+[7/7] Local 844 | POS 1 | Z 499 | Closed 20260102
+      $ python run.py --modulos VENTAS MEDIOS_PAGO REDONDEOS DEPOSITOS GUIAS --localid 844 --pos 1 --z 499
+
+====================================================================================================
+
+✓ Comandos guardados en missing_cierres_commands.sh
+
+====================================================================================================
+RESUMEN FINAL
+====================================================================================================
+
+✓ Cierres faltantes identificados: 7
+✓ Modo: Ejecución directa por Z (znumber) - sin usar fechas
+✓ Reportes generados:
+   - qa_missing_cierres.csv (Reporte QA detallado)
+   - missing_cierres_commands.sh (Comandos para ejecutar en PROD)
+
+⚠️  PRÓXIMOS PASOS:
+   1. Revisar qa_missing_cierres.csv para validar los datos
+   2. Si todo OK, ejecutar missing_cierres_commands.sh en PROD
+   3. Los datos se cargarán en DW después de ejecutar los comandos
+   4. Cada comando ejecuta solo el cierre especificado (Z) para la tienda/caja
+
+====================================================================================================

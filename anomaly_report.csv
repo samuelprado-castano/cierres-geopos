@@ -1,0 +1,5 @@
+localid,pos,closed,has_anomaly,data_valid,orphans_count,recommendation
+286,1,20260112,False,True,0,[LOAD] Carga normal sin problemas
+286,1,20260122,False,True,0,[LOAD] Carga normal sin problemas
+322,1,20260122,False,True,0,[LOAD] Carga normal sin problemas
+817,1,20260131,False,True,0,[LOAD] Carga normal sin problemas
