@@ -6,7 +6,7 @@ import sqlalchemy as sa
 eng_geocom = db.get_connection('geocom')
 eng_dw = db.get_connection('dw')
 
-def ejecutar_etl(df_totals, IVA_RATE, modulos):
+def ejecutar_etl(df_totals, IVA_RATE, modulos, dry_run=False):
     # for row in df_totals.itertuples(index=False):
     
     
@@ -246,10 +246,14 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
             }).round(3)
 
             # Guardamos el detalle en la base de datos
-            df_detalles_group.to_sql('cierres_detalle', eng_dw,if_exists='append', index=False, schema='modelo_ventas_rauco')
-            
-            # Guardamos los precios del detalle en la base de datos
-            df_precios_group.to_sql('cierres_precio_producto', eng_dw,if_exists='append', index=False, schema='modelo_ventas_rauco')
+            if not dry_run:
+                df_detalles_group.to_sql('cierres_detalle', eng_dw,if_exists='append', index=False, schema='modelo_ventas_rauco')
+
+                # Guardamos los precios del detalle en la base de datos
+                df_precios_group.to_sql('cierres_precio_producto', eng_dw,if_exists='append', index=False, schema='modelo_ventas_rauco')
+            else:
+                print(f"[DRY RUN] {len(df_detalles_group)} detalles de ventas (no insertados)")
+                print(f"[DRY RUN] {len(df_precios_group)} precios de productos (no insertados)")
             
             # Calculamos los montos totales para boleta y factura
             net_amount_boleta = round(gross_amount_bol / (1 + IVA_RATE), 3)  # Neto (sin IVA)
@@ -289,9 +293,12 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
 
             # Convertimos el diccionario a un DataFrame
             df_cierre = pd.DataFrame([data])
-            
+
             # Guardamos el cierre en la base de datos
-            df_cierre.to_sql('cierres_cabecera', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            if not dry_run:
+                df_cierre.to_sql('cierres_cabecera', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            else:
+                print(f"[DRY RUN] 1 cabecera de cierre (no insertada)")
              
         if "MEDIOS_PAGO" in modulos:
             
@@ -364,7 +371,10 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
 
             df_medio_pago = df_medio_pago[cols_existentes]
 
-            df_medio_pago.to_sql('cierres_medio_pago', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')  
+            if not dry_run:
+                df_medio_pago.to_sql('cierres_medio_pago', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            else:
+                print(f"[DRY RUN] {len(df_medio_pago)} medios de pago (no insertados)")  
                      
         if "REDONDEOS" in modulos:
             
@@ -421,7 +431,10 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
 
             df_redondeos = df_redondeos[cols_existentes]
 
-            df_redondeos.to_sql('cierres_medio_pago', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            if not dry_run:
+                df_redondeos.to_sql('cierres_medio_pago', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            else:
+                print(f"[DRY RUN] {len(df_redondeos)} redondeos (no insertados)")
             
         if "DEPOSITOS" in modulos:
             
@@ -469,7 +482,10 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
 
             df_depositos = df_depositos[cols_existentes]
 
-            df_depositos.to_sql('cierres_depositos', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            if not dry_run:
+                df_depositos.to_sql('cierres_depositos', eng_dw, if_exists='append', index=False, schema='modelo_ventas_rauco')
+            else:
+                print(f"[DRY RUN] {len(df_depositos)} depósitos (no insertados)")
 
         if "GUIAS" in modulos:
     
@@ -572,24 +588,28 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
             # Eliminar registros donde quantity es 0
             df_guias_detalle = df_guias_detalle[df_guias_detalle['quantity'] != 0]
             
-            df_guias_detalle['position'] = df_guias_detalle.reset_index().index + 1            
+            df_guias_detalle['position'] = df_guias_detalle.reset_index().index + 1
 
             # Guardar en la base de datos
-            df_guias_cabecera.to_sql(
-                'cierres_guias',
-                eng_dw,
-                if_exists='append',
-                index=False,
-                schema='modelo_ventas_rauco'
-            )
+            if not dry_run:
+                df_guias_cabecera.to_sql(
+                    'cierres_guias',
+                    eng_dw,
+                    if_exists='append',
+                    index=False,
+                    schema='modelo_ventas_rauco'
+                )
 
-            df_guias_detalle.to_sql(
-                'cierres_guias_detalle',
-                eng_dw,
-                if_exists='append',
-                index=False,
-                schema='modelo_ventas_rauco'
-            )
+                df_guias_detalle.to_sql(
+                    'cierres_guias_detalle',
+                    eng_dw,
+                    if_exists='append',
+                    index=False,
+                    schema='modelo_ventas_rauco'
+                )
+            else:
+                print(f"[DRY RUN] {len(df_guias_cabecera)} guías cabecera (no insertadas)")
+                print(f"[DRY RUN] {len(df_guias_detalle)} guías detalle (no insertadas)")
 
         
         print(f">> Ejecución finalizada.", flush=True)
@@ -597,70 +617,168 @@ def ejecutar_etl(df_totals, IVA_RATE, modulos):
 def procesar_cierres(config):
     LOCALID = config.get('localid', None)
     POS = config.get('pos', None)  # opcional
+    Z_LIST = config.get('z', None)
     PAR_INI = config['fecha_ini']
     PAR_FIN = config['fecha_fin']
     IVA_RATE = config.get('iva_rate', 0.19)
     MODULOS = config.get('modulos', [])
+    DRY_RUN = config.get('dry_run', False)
 
     # --- CIERRES ---
-    print(f">> Procesando cierres, fechas={PAR_INI}-{PAR_FIN}")
-    
+    if DRY_RUN:
+        print(f"\n[DRY RUN] Modo TEST - No se escribirá en DB\n")
+
+    if Z_LIST:
+        print(f">> Modo Z: procesando znumbers={Z_LIST}")
+    else:
+        print(f">> Procesando cierres, fechas={PAR_INI}-{PAR_FIN}")
+
     if POS != None:
         print(f">> POS={POS}")
-        
+
     if LOCALID != None:
         print(f">> LOCALID={LOCALID}")
     
-    query_cierres = f"""
-        SELECT
-            RIGHT(CAST(YEAR(curr.closed) AS VARCHAR), 2) + -- YY
-            RIGHT('0' + CAST(MONTH(curr.closed) AS VARCHAR), 2) + -- MM
-            RIGHT('0' + CAST(DAY(curr.closed) AS VARCHAR), 2) + -- DD
-            RIGHT('0' + CAST(DATEPART(HOUR, curr.closed) AS VARCHAR), 2) + -- HH
-            RIGHT('0' + CAST(DATEPART(MINUTE, curr.closed) AS VARCHAR), 2) + -- MM
-            RIGHT('0' + CAST(DATEPART(SECOND, curr.closed) AS VARCHAR), 2) + -- SS
-            CAST(curr.localid AS VARCHAR) + -- TIE
-            CAST(curr.pos AS VARCHAR) AS id,
-            curr.localid,
-            curr.pos,
-            curr.opened,
-            curr.closed,
-            COALESCE(prev.ticketsequencenumber, 0) AS ticketnumber_opened,
-            COALESCE(curr.ticketsequencenumber, 0) AS ticketnumber_closed,
-            curr.znumber,
-            curr.subclass,
-            '0' state
-        FROM totals curr
-        LEFT JOIN totals prev
-            ON curr.localid = prev.localid
-            AND curr.pos = prev.pos
-            AND prev.subclass = 'postotal'
-            AND prev.opened = (
-                SELECT MAX(opened)
-                FROM totals
-                WHERE localid = curr.localid    
-                AND pos = curr.pos
-                AND subclass = 'postotal'
-                AND opened < curr.opened
-            )
-        WHERE curr.subclass = 'postotal'
-        {"AND curr.localid IN(" + str(LOCALID) +")" if LOCALID else ""}
-        {"AND curr.pos = " + str(POS) if POS else ""}
-        AND CAST(CONVERT(VARCHAR, curr.closed, 112) AS INT) BETWEEN {PAR_INI} AND {PAR_FIN}
-        AND curr.localid BETWEEN 100 AND 999
-        ORDER BY curr.localid, curr.pos, curr.opened
-    """
+    # Construir query según modo (Z o fecha)
+    if Z_LIST:
+        # Modo Z: buscar por znumber, localid y pos
+        z_str = ','.join(map(str, Z_LIST))
+        query_cierres = f"""
+            SELECT
+                RIGHT(CAST(YEAR(curr.closed) AS VARCHAR), 2) + -- YY
+                RIGHT('0' + CAST(MONTH(curr.closed) AS VARCHAR), 2) + -- MM
+                RIGHT('0' + CAST(DAY(curr.closed) AS VARCHAR), 2) + -- DD
+                RIGHT('0' + CAST(DATEPART(HOUR, curr.closed) AS VARCHAR), 2) + -- HH
+                RIGHT('0' + CAST(DATEPART(MINUTE, curr.closed) AS VARCHAR), 2) + -- MM
+                RIGHT('0' + CAST(DATEPART(SECOND, curr.closed) AS VARCHAR), 2) + -- SS
+                CAST(curr.localid AS VARCHAR) + -- TIE
+                CAST(curr.pos AS VARCHAR) AS id,
+                curr.localid,
+                curr.pos,
+                curr.opened,
+                curr.closed,
+                COALESCE(prev.ticketsequencenumber, 0) AS ticketnumber_opened,
+                COALESCE(curr.ticketsequencenumber, 0) AS ticketnumber_closed,
+                curr.znumber,
+                curr.subclass,
+                '0' state
+            FROM totals curr
+            LEFT JOIN totals prev
+                ON curr.localid = prev.localid
+                AND curr.pos = prev.pos
+                AND prev.subclass = 'postotal'
+                AND prev.opened = (
+                    SELECT MAX(opened)
+                    FROM totals
+                    WHERE localid = curr.localid
+                    AND pos = curr.pos
+                    AND subclass = 'postotal'
+                    AND opened < curr.opened
+                )
+            WHERE curr.subclass = 'postotal'
+            AND curr.localid = {LOCALID}
+            AND curr.pos = {POS}
+            AND curr.znumber IN ({z_str})
+            AND curr.localid BETWEEN 100 AND 999
+            ORDER BY curr.localid, curr.pos, curr.opened
+        """
+    else:
+        # Modo fecha: comportamiento actual
+        query_cierres = f"""
+            SELECT
+                RIGHT(CAST(YEAR(curr.closed) AS VARCHAR), 2) + -- YY
+                RIGHT('0' + CAST(MONTH(curr.closed) AS VARCHAR), 2) + -- MM
+                RIGHT('0' + CAST(DAY(curr.closed) AS VARCHAR), 2) + -- DD
+                RIGHT('0' + CAST(DATEPART(HOUR, curr.closed) AS VARCHAR), 2) + -- HH
+                RIGHT('0' + CAST(DATEPART(MINUTE, curr.closed) AS VARCHAR), 2) + -- MM
+                RIGHT('0' + CAST(DATEPART(SECOND, curr.closed) AS VARCHAR), 2) + -- SS
+                CAST(curr.localid AS VARCHAR) + -- TIE
+                CAST(curr.pos AS VARCHAR) AS id,
+                curr.localid,
+                curr.pos,
+                curr.opened,
+                curr.closed,
+                COALESCE(prev.ticketsequencenumber, 0) AS ticketnumber_opened,
+                COALESCE(curr.ticketsequencenumber, 0) AS ticketnumber_closed,
+                curr.znumber,
+                curr.subclass,
+                '0' state
+            FROM totals curr
+            LEFT JOIN totals prev
+                ON curr.localid = prev.localid
+                AND curr.pos = prev.pos
+                AND prev.subclass = 'postotal'
+                AND prev.opened = (
+                    SELECT MAX(opened)
+                    FROM totals
+                    WHERE localid = curr.localid
+                    AND pos = curr.pos
+                    AND subclass = 'postotal'
+                    AND opened < curr.opened
+                )
+            WHERE curr.subclass = 'postotal'
+            {"AND curr.localid IN(" + str(LOCALID) +")" if LOCALID else ""}
+            {"AND curr.pos = " + str(POS) if POS else ""}
+            AND CAST(CONVERT(VARCHAR, curr.closed, 112) AS INT) BETWEEN {PAR_INI} AND {PAR_FIN}
+            AND curr.localid BETWEEN 100 AND 999
+            ORDER BY curr.localid, curr.pos, curr.opened
+        """
 
     df_totals = pd.read_sql_query(query_cierres, eng_geocom)
-    
-    query_distinct = f"""
-        select distinct id
-        from DWCASTANO.modelo_ventas_rauco.cierres c 
-        where CAST(CONVERT(VARCHAR, closed, 112) AS INT) BETWEEN {PAR_INI} AND {PAR_FIN}
-        ;
-    """
-    
-    df_distinct = pd.read_sql_query(query_distinct, eng_dw)
+
+    # Construir query de duplicados según modo
+    # IMPORTANTE: Verificar en DOS tablas (cabecera + detalle)
+    # para evitar duplicados si el detalle existe pero la cabecera no
+    if Z_LIST:
+        z_str = ','.join(map(str, Z_LIST))
+
+        # IMPORTANTE: Z no es único por sí solo, es (localid + pos + Z + fecha_closed) lo que identifica un cierre
+        # Si Z se reinicia (ej: después de 100 días), puede haber dos registros con el mismo Z
+        # Por eso incluimos la fecha en la verificación de duplicados
+        fecha_filter = f"AND CAST(CONVERT(VARCHAR, closed, 112) AS INT) BETWEEN {PAR_INI} AND {PAR_FIN}" if PAR_INI and PAR_FIN else ""
+
+        # Verificar en tabla cabecera
+        query_distinct_header = f"""
+            SELECT DISTINCT id
+            FROM DWCASTANO.modelo_ventas_rauco.cierres
+            WHERE localid = {LOCALID}
+            AND pos = {POS}
+            AND znumber IN ({z_str})
+            {fecha_filter}
+        """
+
+        # Verificar en tabla detalle
+        query_distinct_detail = f"""
+            SELECT DISTINCT
+                RIGHT(CAST(YEAR(closed) AS VARCHAR), 2) +
+                RIGHT('0' + CAST(MONTH(closed) AS VARCHAR), 2) +
+                RIGHT('0' + CAST(DAY(closed) AS VARCHAR), 2) +
+                RIGHT('0' + CAST(DATEPART(HOUR, closed) AS VARCHAR), 2) +
+                RIGHT('0' + CAST(DATEPART(MINUTE, closed) AS VARCHAR), 2) +
+                RIGHT('0' + CAST(DATEPART(SECOND, closed) AS VARCHAR), 2) +
+                CAST(localid AS VARCHAR) +
+                CAST(pos AS VARCHAR) AS id
+            FROM DWCASTANO.modelo_ventas_rauco.cierres_detalle
+            WHERE localid = {LOCALID}
+            AND pos = {POS}
+            AND z IN ({z_str})
+            {fecha_filter}
+        """
+
+        df_distinct_header = pd.read_sql_query(query_distinct_header, eng_dw)
+        df_distinct_detail = pd.read_sql_query(query_distinct_detail, eng_dw)
+
+        # Combinar ambas verificaciones (union de IDs)
+        df_distinct = pd.concat([df_distinct_header, df_distinct_detail], ignore_index=True).drop_duplicates()
+    else:
+        query_distinct = f"""
+            select distinct id
+            from DWCASTANO.modelo_ventas_rauco.cierres c
+            where CAST(CONVERT(VARCHAR, closed, 112) AS INT) BETWEEN {PAR_INI} AND {PAR_FIN}
+            ;
+        """
+
+        df_distinct = pd.read_sql_query(query_distinct, eng_dw)
     
     print(f">> Se encontraron un total de {len(df_totals)} cierres pre-filtro de duplicados.\n")
     
@@ -675,10 +793,13 @@ def procesar_cierres(config):
     if df_totals.empty:
         print(">> No hay cierres para procesar. Saliendo...")
         return
-    
+
     # Guardamos el detalle en la base de datos
-    df_totals.to_sql('cierres', eng_dw,if_exists='append', index=False, schema='modelo_ventas_rauco')
-    
-    ejecutar_etl(df_totals, IVA_RATE, MODULOS)
+    if not DRY_RUN:
+        df_totals.to_sql('cierres', eng_dw,if_exists='append', index=False, schema='modelo_ventas_rauco')
+    else:
+        print(f"[DRY RUN] {len(df_totals)} cierres cabecera (no insertados)")
+
+    ejecutar_etl(df_totals, IVA_RATE, MODULOS, DRY_RUN)
 
     print(">> Proceso finalizado.")
