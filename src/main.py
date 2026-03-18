@@ -624,12 +624,20 @@ def procesar_cierres(config):
     MODULOS = config.get('modulos', [])
     DRY_RUN = config.get('dry_run', False)
 
+    # VALIDACIÓN CRÍTICA: Modo Z requiere fechas para desambiguar reinicios
+    if Z_LIST and (PAR_INI is None or PAR_FIN is None):
+        raise ValueError(
+            "CRÍTICO: En modo --z, AMBAS fechas son obligatorias (--fecha_ini y --fecha_fin).\n"
+            "Esto es porque Z puede reiniciarse (ej: Z=1 en 2023 y Z=1 en 2026).\n"
+            "Ejemplo correcto: --z 180 --fecha_ini 20260309 --fecha_fin 20260309"
+        )
+
     # --- CIERRES ---
     if DRY_RUN:
         print(f"\n[DRY RUN] Modo TEST - No se escribirá en DB\n")
 
     if Z_LIST:
-        print(f">> Modo Z: procesando znumbers={Z_LIST}")
+        print(f">> Modo Z: procesando znumbers={Z_LIST}, fechas={PAR_INI}-{PAR_FIN}")
     else:
         print(f">> Procesando cierres, fechas={PAR_INI}-{PAR_FIN}")
 
@@ -679,6 +687,7 @@ def procesar_cierres(config):
             AND curr.localid = {LOCALID}
             AND curr.pos = {POS}
             AND curr.znumber IN ({z_str})
+            AND CAST(CONVERT(VARCHAR, curr.closed, 112) AS INT) BETWEEN {PAR_INI} AND {PAR_FIN}
             AND curr.localid BETWEEN 100 AND 999
             ORDER BY curr.localid, curr.pos, curr.opened
         """

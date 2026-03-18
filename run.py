@@ -31,12 +31,21 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser()
             parser.error("Se debe especificar --z o ambos --fecha_ini y --fecha_fin")
 
-        # En modo Z, validar que localid y pos estén definidos
+        # En modo Z, validar que:
+        # 1. localid y pos estén definidos
+        # 2. TAMBIÉN fecha_ini y fecha_fin (para desambiguar reinicios de Z)
         if args.z:
             if args.localid == "None" or args.pos == "None":
                 import sys
                 parser = argparse.ArgumentParser()
                 parser.error("En modo --z, --localid y --pos son obligatorios (no pueden ser 'None')")
+
+            # CRÍTICO: Cuando hay --z, TAMBIÉN se deben especificar fechas
+            # porque Z puede reiniciarse (ej: Z=1 en 2023 y Z=1 en 2026)
+            if not (args.fecha_ini and args.fecha_fin):
+                import sys
+                parser = argparse.ArgumentParser()
+                parser.error("En modo --z, TAMBIÉN debe especificar --fecha_ini y --fecha_fin (YYYYMMDD) para desambiguar reinicios de contador. Ejemplo: --z 180 --fecha_ini 20260309 --fecha_fin 20260309")
 
     # Obtener fecha actual en formato YYYYMMDD
     fecha_actual = datetime.now().strftime('%Y%m%d')
@@ -50,8 +59,10 @@ if __name__ == "__main__":
         "localid": None if localid == "None" else (int(localid) if localid else None),
         "pos": None if pos == "None" else (int(pos) if pos else None),
         "z": args.z,
-        "fecha_ini": args.fecha_ini if args.fecha_ini else fecha_actual,
-        "fecha_fin": args.fecha_fin if args.fecha_fin else fecha_actual,
+        # Para modo Z: usar fechas exactas especificadas por usuario (sin defaults)
+        # Para modo fecha: usar fecha_actual como default
+        "fecha_ini": args.fecha_ini if args.fecha_ini else (fecha_actual if not args.z else None),
+        "fecha_fin": args.fecha_fin if args.fecha_fin else (fecha_actual if not args.z else None),
         "iva_rate": 0.19,
         "dry_run": args.dry_run
     }
