@@ -114,7 +114,7 @@ def main():
 
     # Parámetros
     fecha_ini = "20260101"  # Enero 2026
-    fecha_fin = "20260315"  # 31 de Enero 2026
+    fecha_fin = "20260317"  # 31 de Enero 2026
 
     print(f"\nPeríodo a analizar: {fecha_ini[0:4]}-{fecha_ini[4:6]}-{fecha_ini[6:8]} a {fecha_fin[0:4]}-{fecha_fin[4:6]}-{fecha_fin[6:8]}")
 
