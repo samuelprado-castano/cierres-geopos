@@ -16,36 +16,53 @@
 - **Documentación Técnica**: Consultar `documentacion.md` para especificaciones detalladas
 - **Historial de Cambios**: Consultar `CHANGES.md` para decisiones técnicas implementadas
 
-## Quick Start
+## Operación Diaria (11 PM - Principal)
 
-### Verificar Configuración
+### Ejecución Automática del ETL
+
+**Horario:** 23:00 (11 PM) todos los días
+**Comando:**
+```bash
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS
+```
+
+**Qué hace:**
+1. Procesa TODOS los cierres de HOY
+2. Desde TODAS las tiendas
+3. Desde TODOS los POS
+4. Carga en DW automáticamente con protecciones de deduplicación
+5. Genera log de ejecución
+
+**Configuración:** Ver cron/scheduler del servidor
+
+---
+
+## Operación Excepcional - Cierres Faltantes
+
+### Cuando Se Detectan Cierres Faltantes
+
+Si por algún motivo se detectan cierres que no fueron cargados en el ETL diario:
+
+```bash
+# 1. Analizar cierres faltantes
+python process_missing_cierres.py
+
+# 2. Revisar validaciones
+cat output/qa_missing_cierres.csv
+
+# 3. Ejecutar carga de faltantes (si está OK)
+bash output/missing_cierres_commands.sh
+```
+
+---
+
+## Verificación Inicial
 
 ```bash
 python test_connection.py
 ```
 
-### Procesar Cierres Faltantes
-
-```bash
-python process_missing_cierres.py
-```
-
-Este script:
-1. Identifica cierres faltantes en DW
-2. Ejecuta validaciones de QA
-3. Genera comandos para producción con protecciones automáticas
-
-### Revisar Resultados
-
-```bash
-cat output/qa_missing_cierres.csv
-```
-
-### Ejecutar en Producción (Después de Aprobación)
-
-```bash
-bash missing_cierres_commands.sh
-```
+Valida que las conexiones a GeoCom y DW estén funcionando correctamente.
 
 ## Estructura de Carpetas
 
@@ -65,24 +82,50 @@ bash missing_cierres_commands.sh
 └── run.py                        # Punto de entrada principal
 ```
 
-## Flujo de Uso
+## Flujo de Operación Normal (ETL Diario)
 
-1. **Análisis** → `python process_missing_cierres.py`
-   - Identifica cierres faltantes
-   - Ejecuta 8 validaciones QA por cierre
-   - Detecta automáticamente Z duplicados
+### 1. Ejecución Automática (11 PM - Todos los Días)
 
-2. **Revisión** → `cat output/qa_missing_cierres.csv`
-   - Valida que todos los cierres están OK
-   - Revisa si hay advertencias
+```bash
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS
+```
 
-3. **Generación de Comandos** → Genera automáticamente `missing_cierres_commands.sh`
-   - Incluye parámetros de deduplicación para casos complejos
-   - Listo para ejecutar en producción
+- Procesa todos los cierres de HOY
+- Todas las tiendas, todos los POS
+- Carga automáticamente en DW
+- Con validación de duplicados integrada
+- Registra resultado en logs/
 
-4. **Ejecución en PROD** → `bash missing_cierres_commands.sh`
-   - Solo después de aprobación
-   - Con todas las validaciones en lugar
+### 2. Validación (Manual - Si Necesario)
+
+Si hay dudas sobre cierres o se detectan faltantes:
+
+```bash
+python process_missing_cierres.py
+```
+
+- Identifica cierres faltantes
+- Ejecuta 8 validaciones QA
+- Detecta automáticamente Z duplicados
+
+### 3. Revisión de Resultados
+
+```bash
+cat output/qa_missing_cierres.csv
+```
+
+- Valida status de cada cierre
+- Revisa advertencias o errores
+
+### 4. Carga de Faltantes (Si Hay)
+
+```bash
+bash output/missing_cierres_commands.sh
+```
+
+- Solo si se detectaron cierres faltantes
+- Con deduplicación automática
+- Después de revisión manual
 
 ## Conceptos Clave
 

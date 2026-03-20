@@ -23,13 +23,37 @@
 **Estado:** LISTO PARA PRODUCCIÓN
 **Riesgo:** BAJO (con todas las protecciones implementadas)
 
-### Objetivo
+### Objetivo Principal
 
-Cargar automáticamente cierres de caja faltantes desde el servidor de punto de venta (GeoPOS) al Data Warehouse corporativo, con máximas protecciones contra:
-- Duplicados accidentales
-- Inconsistencias de datos
-- Pérdida de información
-- Cierres que se repiten por reinicio de contador
+Cargar automáticamente TODOS los cierres de caja diarios desde el servidor de punto de venta (GeoPOS) al Data Warehouse corporativo.
+
+**Ejecución:** TODOS LOS DÍAS a las 11 PM
+```bash
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS
+```
+
+**Alcance:**
+- Todas las tiendas
+- Todos los POS
+- Todos los cierres del día
+
+### Protecciones Integradas
+
+- Validación de duplicados (cabecera + detalle)
+- Detección automática de Z duplicados (reinicio de contador)
+- Transacciones ACID (todo-o-nada)
+- Modo append-only (nunca borra datos)
+- Inconsistencias de datos bloqueadas
+- Pérdida de información prevenida
+
+### Funcionalidad Secundaria
+
+Identificar y procesar cierres faltantes en casos excepcionales:
+```bash
+python process_missing_cierres.py
+```
+
+Se usa solo cuando se detectan cierres que no fueron cargados en el ETL diario.
 
 ### Contexto de Negocio
 
@@ -597,74 +621,108 @@ WHERE dw.id IS NULL
 
 ## Casos de Uso Típicos en Producción
 
-### Caso 1: Procesamiento Diario de Cierres Faltantes (Recomendado)
+### CASO PRINCIPAL: ETL Diario Automático (11 PM)
 
-**Cuándo usar:** Después del cierre de operaciones cada día
-**Frecuencia:** Una vez por día (noche)
+**Frecuencia:** TODOS LOS DÍAS a las 23:00
+**Responsabilidad:** Procesar cierres del día
+**Comando ejecutado por cron/scheduler:**
+```bash
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS
+```
+
+**Flujo:**
+1. Se ejecuta automáticamente a las 11 PM
+2. Procesa TODOS los cierres de HOY
+3. Desde TODAS las tiendas
+4. Desde TODOS los POS
+5. Carga en DW con validación integrada
+6. Registra resultado en logs/
+
+**Protecciones automáticas:**
+- Validación de duplicados (cabecera + detalle)
+- Transacciones ACID
+- Append-only (nunca borra)
+- Detección automática de Z duplicados
+
+**Resultado esperado:**
+- Cierres del día en DW
+- Log de ejecución (logs/log_YYYYMMDD.txt)
+- Sin errores en stderr
+
+---
+
+### Caso 2: Identificar y Procesar Cierres Faltantes (Excepcional)
+
+**Cuándo usar:** Cuando se detectan cierres que no fueron cargados
 **Comando:**
 ```bash
+# 1. Analizar qué falta
 python process_missing_cierres.py
+
+# 2. Revisar validaciones
+cat output/qa_missing_cierres.csv
+
+# 3. Procesar faltantes (si está OK)
+bash output/missing_cierres_commands.sh
 ```
 
 **Qué hace:**
-1. Identifica todos los cierres faltantes del período anterior
-2. Ejecuta QA automático
-3. Genera comandos para PROD
-4. Genera reporte CSV
+- Compara GeoCom vs DW
+- Identifica diferencias
+- Ejecuta 8 validaciones QA por cierre
+- Genera comandos con deduplicación automática
+- Detecta Z duplicados y agrega fechas
 
 **Resultado esperado:**
-- 0-50 cierres faltantes (varía según operaciones)
+- 0-50 cierres faltantes (según caso)
 - CSV con status de validación
-- Script listo para ejecutar
+- Script ejecutable en PROD
 
 ---
 
-### Caso 2: Procesar Un Cierre Específico
+### Caso 3: Procesar Un Cierre Específico (Manual)
 
-**Cuándo usar:** Cuando se identifica un cierre faltante específico
+**Cuándo usar:** Para casos excepcionales o pruebas
 **Comando:**
 ```bash
-python run.py --modulos VENTAS MEDIOS_PAGO --localid 259 --pos 1 --z 1056
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS \
+  --localid 259 --pos 1 --z 1056
 ```
 
-**Resultado esperado:**
-- Cierre cargado en DW
-- Todos sus detalles asociados
+**Nota:** Generalmente no es necesario (ETL diario lo hace)
 
 ---
 
-### Caso 3: Desambiguar Z Duplicado
+### Caso 4: Desambiguar Z Duplicado (Manual)
 
-**Cuándo usar:** Cuando Z se repitió (reinicio de contador)
-**Detección automática:** process_missing_cierres.py lo detecta
-
-**Comando generado automáticamente:**
+**Cuándo usar:** Si un cierre tiene Z que se repitió
+**Comando:**
 ```bash
-python run.py --modulos VENTAS MEDIOS_PAGO \
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS \
   --localid 333 --pos 1 --z 1 \
   --fecha_ini 20260311 --fecha_fin 20260311
 ```
 
-**Nota:** El sistema agrega automáticamente las fechas para resolver la ambigüedad
+**Nota:** process_missing_cierres.py detecta automáticamente y agrega las fechas
 
 ---
 
-### Caso 4: Procesamiento por Rango de Fechas
+### Caso 5: Procesamiento por Rango de Fechas (Recuperación)
 
-**Cuándo usar:** Carga masiva o recuperación histórica
+**Cuándo usar:** Carga histórica o recuperación de datos
 **Comando:**
 ```bash
-python run.py --modulos VENTAS MEDIOS_PAGO \
+python run.py REDONDEOS MEDIOS_PAGO VENTAS DEPOSITOS GUIAS \
   --fecha_ini 20260310 --fecha_fin 20260312
 ```
 
 **Resultado esperado:**
-- Todos los cierres del 10, 11 y 12 de marzo
-- ~300-500 cierres típicamente
+- Todos los cierres del período especificado
+- ~300-500 cierres por 3 días típicamente
 
 ---
 
-### Caso 5: Test Sin Escribir en BD (Dry-Run)
+### Caso 6: Test Sin Escribir en BD (Dry-Run)
 
 **Cuándo usar:** Validar antes de ejecutar
 **Comando:**
