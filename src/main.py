@@ -789,19 +789,28 @@ def procesar_cierres(config):
 
         df_distinct = pd.read_sql_query(query_distinct, eng_dw)
     
-    print(f">> Se encontraron un total de {len(df_totals)} cierres pre-filtro de duplicados.\n")
-    
+    total_encontrados = len(df_totals)
+    print(f">> Se encontraron un total de {total_encontrados} cierres pre-filtro de duplicados.\n")
+
     df_dup = df_totals[df_totals['id'].isin(df_distinct['id'].tolist())]
 
     print(f">> Cierres ya procesados: {len(df_dup)}. Se eliminan de la lista de cierres a procesar.\n")
 
     df_totals = df_totals[~df_totals['id'].isin(df_distinct['id'].tolist())]
-    
+
     print(f">> Se encontraron un total de {len(df_totals)} cierres para los filtros aplicados.\n")
 
     if df_totals.empty:
         print(">> No hay cierres para procesar. Saliendo...")
-        return
+        return {
+            "total_encontrados": total_encontrados,
+            "duplicados": len(df_dup),
+            "procesados": 0,
+            "fecha_ini": PAR_INI,
+            "fecha_fin": PAR_FIN,
+            "modulos": MODULOS,
+            "dry_run": DRY_RUN
+        }
 
     # Guardamos el detalle en la base de datos
     if not DRY_RUN:
@@ -812,3 +821,13 @@ def procesar_cierres(config):
     ejecutar_etl(df_totals, IVA_RATE, MODULOS, DRY_RUN)
 
     print(">> Proceso finalizado.")
+
+    return {
+        "total_encontrados": total_encontrados,
+        "duplicados": len(df_dup),
+        "procesados": len(df_totals),
+        "fecha_ini": PAR_INI,
+        "fecha_fin": PAR_FIN,
+        "modulos": MODULOS,
+        "dry_run": DRY_RUN
+    }

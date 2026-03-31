@@ -7,9 +7,12 @@ Script principal para procesar cierres faltantes
 import sys
 import os
 import pandas as pd
+import sqlalchemy as sa
 from datetime import datetime
 from src.missing_cierres import MissingCierresProcessor, print_missing_summary
 from src.qa_missing_cierres import QAMissingCierres
+from src.send_email import enviar_correo_reporte
+from src.config import DESTINATARIOS, DB_URL_SPR
 
 def format_date_to_yyyymmdd(date_str):
     """Convierte string de fecha a formato YYYYMMDD"""
@@ -113,8 +116,8 @@ def main():
     print("=" * 100)
 
     # Parámetros
-    fecha_ini = "20260101"  # Enero 2026
-    fecha_fin = "20260317"  # 31 de Enero 2026
+    fecha_ini = "20260301"  # Enero 2026
+    fecha_fin = "20260331"  # 31 de Enero 2026
 
     print(f"\nPeríodo a analizar: {fecha_ini[0:4]}-{fecha_ini[4:6]}-{fecha_ini[6:8]} a {fecha_fin[0:4]}-{fecha_fin[4:6]}-{fecha_fin[6:8]}")
 
@@ -131,6 +134,11 @@ def main():
 
     if df_missing.empty:
         print("[OK] No hay cierres faltantes para este período")
+        enviar_correo_reporte(
+            titulo_reporte="Cierres No Enviados GeoPOS - DW",
+            mensaje_extra="No se detectaron cierres faltantes en el periodo analizado.",
+            destinatarios=DESTINATARIOS
+        )
         return
 
     # # PASO 2: Ejecutar QA
@@ -161,20 +169,65 @@ def main():
     # Guardar comandos en archivo
     script_filename = save_commands_to_file(commands)
 
+    # PASO 4: Obtener montos afectos desde geocom
+    print("\n" + "-" * 100)
+    print("PASO 4: Obteniendo montos afectos desde GeoCom")
+    print("-" * 100)
+
+    df_con_montos = processor.get_gross_amounts(df_missing)
+
+    # PASO 5: Enviar email con reporte de faltantes
+    print("\n" + "-" * 100)
+    print("PASO 5: Enviando email con reporte de cierres faltantes")
+    print("-" * 100)
+
+    df_email = df_con_montos[['localid', 'pos', 'closed', 'id', 'monto_afecto']].copy()
+    df_email['closed_date'] = pd.to_datetime(df_email['closed']).dt.strftime('%Y-%m-%d')
+    df_email['closed_time'] = pd.to_datetime(df_email['closed']).dt.strftime('%H:%M:%S')
+    df_email['monto_afecto'] = df_email['monto_afecto'].apply(lambda x: f"${x:,.0f}")
+    df_email_final = df_email[['localid', 'pos', 'closed_date', 'closed_time', 'id', 'monto_afecto']].copy()
+    df_email_final.columns = ['Local', 'POS', 'Fecha Cierre', 'Hora Cierre', 'ID', 'Monto Afecto']
+
+    enviar_correo_reporte(
+        titulo_reporte="Cierres No Enviados GeoPOS - DW",
+        df=df_email_final,
+        mensaje_extra=f"Se detectaron <strong>{len(df_missing)}</strong> cierres faltantes en el periodo {fecha_ini} - {fecha_fin}.",
+        destinatarios=DESTINATARIOS
+    )
+
+    # PASO 6: Insertar en reprocesos.geoposdocuments (SPR)
+    print("\n" + "-" * 100)
+    print("PASO 6: Registrando cierres faltantes en reprocesos.geoposdocuments")
+    print("-" * 100)
+
+    try:
+        eng_spr = sa.create_engine(DB_URL_SPR)
+        df_spr = df_missing[['localid', 'pos', 'id', 'closed']].copy()
+        df_spr['localid'] = df_spr['localid'].astype(str).str.zfill(3)
+        df_spr['pos'] = df_spr['pos'].astype(str)
+        df_spr.rename(columns={'id': 'geoposdocument'}, inplace=True)
+        df_spr['closedate'] = pd.to_datetime(df_spr['closed']).dt.date
+        df_spr['sendstatus'] = 'NOK'
+        df_spr['sendresponse'] = 'Cierre faltante detectado'
+        df_spr = df_spr[['localid', 'pos', 'geoposdocument', 'closedate', 'sendstatus', 'sendresponse']]
+        df_spr.to_sql('geoposdocuments', eng_spr, if_exists='append', index=False, schema='reprocesos')
+        print(f"[OK] {len(df_spr)} registros insertados en reprocesos.geoposdocuments")
+    except Exception as e:
+        print(f"[ERROR] Error al insertar en SPR: {e}")
+
     # Resumen final
     print("\n" + "=" * 100)
     print("RESUMEN FINAL")
     print("=" * 100)
     print(f"\n[OK] Cierres faltantes identificados: {len(df_missing)}")
-    print(f"[OK] Modo: Ejecución directa por Z (znumber) - sin usar fechas")
+    print(f"[OK] Email enviado con reporte de faltantes")
+    print(f"[OK] Registros insertados en reprocesos.geoposdocuments")
     print(f"[OK] Reportes generados:")
-    print(f"   - qa_missing_cierres.csv (Reporte QA detallado)")
     print(f"   - {script_filename} (Comandos para ejecutar en PROD)")
-    print(f"\n[ADVERTENCIA] PRÓXIMOS PASOS:")
-    print(f"   1. Revisar qa_missing_cierres.csv para validar los datos")
-    print(f"   2. Si todo OK, ejecutar {script_filename} en PROD")
-    print(f"   3. Los datos se cargarán en DW después de ejecutar los comandos")
-    print(f"   4. Cada comando ejecuta solo el cierre especificado (Z) para la tienda/caja")
+    print(f"\n[ADVERTENCIA] PROXIMOS PASOS:")
+    print(f"   1. Si todo OK, ejecutar {script_filename} en PROD")
+    print(f"   2. Los datos se cargaran en DW despues de ejecutar los comandos")
+    print(f"   3. Cada comando ejecuta solo el cierre especificado (Z) para la tienda/caja")
     print("\n" + "=" * 100 + "\n")
 
 if __name__ == "__main__":

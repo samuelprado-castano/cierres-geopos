@@ -4,6 +4,8 @@ import os
 import argparse
 from datetime import datetime
 from src.main import procesar_cierres
+from src.send_email import enviar_correo_reporte
+from src.config import DESTINATARIOS
 # from src.main_qa import procesar_cierres_excel
 # from src.vista_qa import procesar_vista_qa
 
@@ -68,4 +70,21 @@ if __name__ == "__main__":
     }
 
     # Ejecutar procesamiento
-    procesar_cierres(config)
+    resumen = procesar_cierres(config)
+
+    # Enviar email de confirmacion
+    if resumen:
+        dry_tag = "[DRY RUN] " if resumen.get('dry_run') else ""
+        mensaje = (
+            f"{dry_tag}Resultado del ETL de cierres:<br><br>"
+            f"Periodo: {resumen['fecha_ini']} - {resumen['fecha_fin']}<br>"
+            f"Modulos: {', '.join(resumen['modulos'])}<br>"
+            f"Cierres encontrados: {resumen['total_encontrados']}<br>"
+            f"Duplicados (omitidos): {resumen['duplicados']}<br>"
+            f"Cierres procesados: {resumen['procesados']}<br>"
+        )
+        enviar_correo_reporte(
+            titulo_reporte="ETL Cierres GeoPOS - DW",
+            mensaje_extra=mensaje,
+            destinatarios=DESTINATARIOS
+        )

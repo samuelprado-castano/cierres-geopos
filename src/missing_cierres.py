@@ -114,6 +114,53 @@ class MissingCierresProcessor:
 
         return df_geocom_missing[['id', 'localid', 'pos', 'opened', 'closed', 'ticketnumber_opened', 'ticketnumber_closed', 'znumber']]
 
+    def get_gross_amounts(self, df_missing):
+        """
+        Obtiene el monto afecto (grossamount) desde geocom para cada cierre faltante.
+        Usa SUM de payments.amount agrupado por cierre (localid + pos + closed).
+        """
+        if df_missing.empty:
+            return df_missing.copy()
+
+        results = []
+        for _, row in df_missing.iterrows():
+            localid = int(row['localid'])
+            pos = int(row['pos'])
+            tkt_opened = int(row['ticketnumber_opened'])
+            tkt_closed = int(row['ticketnumber_closed'])
+            opened_fmt = pd.Timestamp(row['opened']).strftime('%Y%m%d')
+            closed_fmt = pd.Timestamp(row['closed']).strftime('%Y%m%d')
+
+            query = f"""
+            SELECT COALESCE(SUM(payments.amount), 0) as monto_afecto
+            FROM tickets (nolock)
+            INNER JOIN payments
+                ON tickets.opendate = payments.opendate
+                AND tickets.localid = payments.localid
+                AND tickets.ticketnumber = payments.ticketnumber
+                AND tickets.pos = payments.pos
+            INNER JOIN paymentmodes
+                ON payments.paymentmode = paymentmodes.id
+            WHERE tickets.localid = {localid}
+                AND tickets.pos = {pos}
+                AND ISNUMERIC(tickets.ticketnumber) = 1
+                AND CAST(tickets.ticketnumber AS INT) BETWEEN {tkt_opened} AND {tkt_closed}
+                AND CAST(CONVERT(VARCHAR, tickets.opendate, 112) AS INT) BETWEEN {opened_fmt} AND {closed_fmt}
+                AND paymentmodes.id NOT IN (40)
+                AND tickets.documenttype = 'sale'
+            """
+            try:
+                df_amount = pd.read_sql_query(query, self.eng_geocom)
+                monto = df_amount['monto_afecto'].iloc[0] if not df_amount.empty else 0
+            except Exception as e:
+                print(f"Error obteniendo monto para {localid}-{pos}: {e}")
+                monto = 0
+            results.append(monto)
+
+        df_result = df_missing.copy()
+        df_result['monto_afecto'] = results
+        return df_result
+
     def validate_closure_data(self, localid, pos, closed_fmt):
         """
         Valida que un cierre exista en geocom y tenga datos válidos
